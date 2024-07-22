@@ -1,0 +1,32 @@
+name: HiddenLayer-ModelScanner
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ScanModelsInRepo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository to the runner
+        uses: actions/checkout@v4  
+      - name: Login to quay.io
+        run: docker login --username=${{  secrets.HL_CONTAINER_REGISTRY_USER }} --password=${{  secrets.HL_CONTAINER_REGISTRY_SECRET }} quay.io
+      - name: Scan models
+        run: |
+          scan_results=$(docker run --rm --entrypoint /modelscan/cli -v /home/runner/work/<REPO_NAME>/<REPO_NAME>/<MODEL_DIRECTORY>:/files-to-scan quay.io/hiddenlayer/distro-cli-modelscanner:<VERSION> --input /files-to-scan)
+          echo scan_results=$scan_results >> $GITHUB_OUTPUT
+        id: scan_models
+      - name: Scan results
+        run: |
+          echo '${{ steps.scan_models.outputs.scan_results }}' | jq
+      - name: Fail job if MALICIOUS detection
+        if: contains(steps.scan_models.outputs.scan_results, 'MALICIOUS')
+        run: |
+          echo 'HiddenLayer ModelScanner detected malicious content'
+          exit 1
+      - name: Fail job if SUSPICIOUS detection
+        if: contains(steps.scan_models.outputs.scan_results, 'SUSPICIOUS')
+        run: |
+          echo 'HiddenLayer ModelScanner detected suspicious content'
+          exit 1
