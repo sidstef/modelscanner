@@ -1,5 +1,8 @@
 name: HiddenLayer-ModelScanner
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
