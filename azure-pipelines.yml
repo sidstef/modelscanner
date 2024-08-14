@@ -26,13 +26,16 @@ jobs:
     
   - script: |
       scan_results=$(docker run --rm --entrypoint /modelscan/cli -v $(Build.SourcesDirectory)/Models:/files-to-scan quay.io/hiddenlayer/distro-cli-modelscanner:24.6.1 --input /files-to-scan)
-      echo "scan_results=$scan_results"
+      echo "scan_results=$scan_results" > $(Pipeline.Workspace)/scan_results.txt
+      echo "##vso[task.setvariable variable=scan_results;isOutput=true]$scan_results" >> $(Pipeline.Workspace)/scan_results.txt
     displayName: 'Scan models'
     name: scan_models
 
   - script: |
       echo "$(scan_models.scan_results)" | jq
     displayName: 'Scan results'
+    env:
+      scan_results: $(scan_models.scan_results)
 
   - script: |
       echo 'HiddenLayer ModelScanner detected malicious content'
