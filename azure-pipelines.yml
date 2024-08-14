@@ -38,13 +38,11 @@ jobs:
       scan_results: $(scan_models.scan_results)
 
   - script: |
-      echo 'HiddenLayer ModelScanner detected malicious content'
-      exit 1
-    condition: and(succeeded(), contains('$(scan_models.scan_results)', 'MALICIOUS'))
-    displayName: 'Fail job if MALICIOUS detection'
-
-  - script: |
-      echo 'HiddenLayer ModelScanner detected suspicious content'
-      exit 1
-    condition: and(succeeded(), contains('$(scan_models.scan_results)', 'SUSPICIOUS'))
-    displayName: 'Fail job if SUSPICIOUS detection'
+      if echo "$(scan_models.scan_results)" | grep -q 'MALICIOUS'; then
+        echo 'HiddenLayer ModelScanner detected malicious content'
+        exit 1
+      elif echo "$(scan_models.scan_results)" | grep -q 'SUSPICIOUS'; then
+        echo 'HiddenLayer ModelScanner detected suspicious content'
+        exit 1
+      fi
+    displayName: 'Fail job if detection'
