@@ -24,10 +24,7 @@ jobs:
 
   - script: docker login --username=$(HL_CONTAINER_REGISTRY_USER) --password=$(HL_CONTAINER_REGISTRY_SECRET) quay.io
     displayName: 'Login to quay.io'
-    env:
-      HL_CONTAINER_REGISTRY_USER: $(HL_CONTAINER_REGISTRY_USER)
-      HL_CONTAINER_REGISTRY_SECRET: $(HL_CONTAINER_REGISTRY_SECRET)
-
+    
   - script: |
       scan_results=$(docker run --rm --entrypoint /modelscan/cli -v $(Build.SourcesDirectory)/Models:/files-to-scan quay.io/hiddenlayer/distro-cli-modelscanner:24.6.1 --input /files-to-scan)
       echo scan_results=$scan_results
