@@ -22,7 +22,7 @@ jobs:
   - checkout: self
     displayName: 'Check out the repository to the runner'
 
-  - script: docker login --username=$(HL_CONTAINER_REGISTRY_USER) --password=$(HL_CONTAINER_REGISTRY_SECRET) quay.io
+  - script: echo $(HL_CONTAINER_REGISTRY_SECRET) | docker login --username $(HL_CONTAINER_REGISTRY_USER) --password-stdin quay.io
     displayName: 'Login to quay.io'
     
   - script: |
