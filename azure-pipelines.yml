@@ -1,8 +1,3 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
 trigger:
   branches:
     include:
@@ -16,23 +11,27 @@ pr:
 pool:
   vmImage: 'ubuntu-latest'
 
+variables:
+  - group: hl_docker_registry  
+
 jobs:
 - job: ScanModelsInRepo
   steps:
   - checkout: self
     displayName: 'Check out the repository to the runner'
 
-  - script: echo $(HL_CONTAINER_REGISTRY_SECRET) | docker login --username $(HL_CONTAINER_REGISTRY_USER) --password-stdin quay.io
+  - script: |
+      echo "$(HL_CONTAINER_REGISTRY_SECRET)" | docker login quay.io -u "$(HL_CONTAINER_REGISTRY_USER)" --password-stdin
     displayName: 'Login to quay.io'
     
   - script: |
       scan_results=$(docker run --rm --entrypoint /modelscan/cli -v $(Build.SourcesDirectory)/Models:/files-to-scan quay.io/hiddenlayer/distro-cli-modelscanner:24.6.1 --input /files-to-scan)
-      echo scan_results=$scan_results
+      echo "scan_results=$scan_results"
     displayName: 'Scan models'
     name: scan_models
 
   - script: |
-      echo '$(scan_models.scan_results)' | jq
+      echo "$(scan_models.scan_results)" | jq
     displayName: 'Scan results'
 
   - script: |
