@@ -1,0 +1,51 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+jobs:
+- job: ScanModelsInRepo
+  steps:
+  - checkout: self
+    displayName: 'Check out the repository to the runner'
+
+  - script: docker login --username=$(HL_CONTAINER_REGISTRY_USER) --password=$(HL_CONTAINER_REGISTRY_SECRET) quay.io
+    displayName: 'Login to quay.io'
+    env:
+      HL_CONTAINER_REGISTRY_USER: $(HL_CONTAINER_REGISTRY_USER)
+      HL_CONTAINER_REGISTRY_SECRET: $(HL_CONTAINER_REGISTRY_SECRET)
+
+  - script: |
+      scan_results=$(docker run --rm --entrypoint /modelscan/cli -v $(Build.SourcesDirectory)/Models:/files-to-scan quay.io/hiddenlayer/distro-cli-modelscanner:24.6.1 --input /files-to-scan)
+      echo scan_results=$scan_results
+    displayName: 'Scan models'
+    name: scan_models
+
+  - script: |
+      echo '$(scan_models.scan_results)' | jq
+    displayName: 'Scan results'
+
+  - script: |
+      echo 'HiddenLayer ModelScanner detected malicious content'
+      exit 1
+    condition: and(succeeded(), contains('$(scan_models.scan_results)', 'MALICIOUS'))
+    displayName: 'Fail job if MALICIOUS detection'
+
+  - script: |
+      echo 'HiddenLayer ModelScanner detected suspicious content'
+      exit 1
+    condition: and(succeeded(), contains('$(scan_models.scan_results)', 'SUSPICIOUS'))
+    displayName: 'Fail job if SUSPICIOUS detection'
