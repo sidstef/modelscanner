@@ -1,0 +1,14 @@
+trigger:
+- none
+
+variables:
+  - group: hl_docker_registry
+
+jobs:
+- job: LoginToQuay
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - script: |
+      echo "$(HL_CONTAINER_REGISTRY_SECRET)" | docker login quay.io -u "$(HL_CONTAINER_REGISTRY_USER)" --password-stdin
+    displayName: "Login to Quay"
