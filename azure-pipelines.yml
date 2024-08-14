@@ -31,9 +31,7 @@ jobs:
     name: scan_models
 
   - script: |
-     scan_results=$(echo '[{"detections":[{"description":"This detection rule was triggered by the presence of a function or library that can be used to execute code. Offending module / function: eval / exec / system.","message":"pickle-bytes_builtins_eval","severity":"MALICIOUS"}],"end_time":1723663973896,"file_path":"file://files-to-scan/eval.pkl","results":{"md5":"1b4797b953564fd8dc4399b159e96767","pickle_header":{"pickle_version":"4","type":"pickle"},"pickle_modules":["builtins.eval"],"sha256":"7a75f4b5c61ad06470ba932070c200e996b77c83abd5d92c69296ecaf9d3ec97","subtype":[],"tlsh":"6ab09b226c5561c4c417557dd2b5437481914c4422f53051c1e9c4461c55976502d078","type":"pickle"},"scan_id":"7a75f4b5c61ad06470ba932070c200e996b77c83abd5d92c69296ecaf9d3ec97","start_time":1723663973894,"status":"done"}]')
-     echo $scan_results > $(Pipeline.Workspace)/scan_results.json
-     cat $(Pipeline.Workspace)/scan_results.json | jq
+      echo "$(scan_models.scan_results)"
     displayName: 'Scan results'
 
   - script: |
