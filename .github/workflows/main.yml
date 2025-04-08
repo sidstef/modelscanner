@@ -1,0 +1,137 @@
+name: Model Scanner Dispatcher For HuggingFace
+
+on:
+  workflow_dispatch:
+    inputs:
+      huggingface_repo_id:
+        description: 'HuggingFace Repository ID'
+        required: true
+      hiddenlayer_client_id:
+        description: 'HiddenLayer Client ID'
+        required: true
+      hiddenlayer_client_secret:
+        description: 'HiddenLayer Client Secret'
+        required: true
+      hiddenlayer_api_url:
+        description: 'HiddenLayer API URL'
+        required: true
+        default: 'https://api.us.hiddenlayer.ai'
+      hiddenlayer_auth_url:
+        description: 'HiddenLayer Auth URL'
+        required: true
+        default: 'https://auth.hiddenlayer.ai'
+
+jobs:
+  scan-huggingface-model:
+    runs-on: github-runner-scale-set-default
+    name: Scan HuggingFace Model (${{ inputs.huggingface_repo_id }})
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install huggingface_hub requests
+
+      - name: Run Python code
+        run: |
+          python -c "
+          from huggingface_hub import snapshot_download
+          
+          tmp_dir = '${{ github.workspace }}/${{ inputs.huggingface_repo_id }}'
+          
+          snapshot_download(
+            repo_id='${{ inputs.huggingface_repo_id }}',
+            local_dir=tmp_dir,
+            local_dir_use_symlinks=False,
+            cache_dir=tmp_dir
+          )
+          "
+
+      - name: Login to Quay
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.HL_CONTAINER_REGISTRY_USER }}
+          password: ${{ secrets.HL_CONTAINER_REGISTRY_SECRET }}
+
+      - name: Scan models
+        run: |
+          # scan model with CLI
+          echo "::group::Run Model Scanner CLI"
+          scan_results=$(docker run --rm --entrypoint /modelscan/cli -v ${{ github.workspace }}/${{ inputs.huggingface_repo_id }}:/hf/${{ inputs.huggingface_repo_id }} quay.io/hiddenlayer/distro-cli-modelscanner:24.10.1 --input /hf/${{ inputs.huggingface_repo_id }} --exclude-pattern '*.lock' --exclude-pattern '*.metadata' --output-format v3)
+          echo "::endgroup::"
+          
+          echo "::group::Model Scanner CLI Results"
+          echo $scan_results | jq
+          echo "::endgroup::"
+          
+          # save scan results to file for upload
+          scan_results_json=$(echo $scan_results | jq -c .)
+          echo $scan_results_json > scan_results.json
+          #echo scan_results_json=$scan_results_json >> $GITHUB_OUTPUT
+
+        id: scan_models
+
+      - name: Login to HiddenLayer
+        id: hiddenlayer_authorization
+        run: |
+          # get access token for HiddenLayer API
+          hiddenlayer_access_token=$(curl -s -u "${{ inputs.hiddenlayer_client_id }}":"${{ inputs.hiddenlayer_client_secret }}" -X POST "${{ inputs.hiddenlayer_auth_url }}/oauth2/token?grant_type=client_credentials" | jq -r '.access_token')
+          if [ -z "$hiddenlayer_access_token" ] || [ "$hiddenlayer_access_token" == "null" ]; then
+            echo "::error Error: Unable to retrieve access token"
+            exit 1
+          else
+            echo $hiddenlayer_access_token
+            echo hiddenlayer_access_token=$hiddenlayer_access_token >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload scan results
+        run: |
+          
+          echo "::group::Upload to HiddenLayer API"
+          python -c "
+          import json
+          import requests
+          
+          # create scan results payload
+          with open('scan_results.json', 'rb') as fin:
+            payload = json.load(fin)
+          
+          # remove model_id and model_version_id
+          del payload['inventory']['model_id']
+          del payload['inventory']['model_version_id']
+          
+          # update payload fields
+          payload['inventory']['model_name'] = '${{ inputs.huggingface_repo_id }}'
+          payload['inventory']['model_version'] = '${{ github.sha }}'[0:7]
+          payload['inventory']['model_source'] = 'adhoc'
+          payload['inventory']['requesting_entity'] = '${{ github.actor }}'
+          
+          # send to hlapi
+          scan_id = payload['scan_id']
+          access_token = '${{ steps.hiddenlayer_authorization.outputs.hiddenlayer_access_token }}'
+          print(access_token)
+          headers = {'Authorization': f'Bearer {access_token}'}
+          response = requests.post(
+            '${{ inputs.hiddenlayer_api_url }}/scan/v3/results/' + scan_id, 
+            json=payload, 
+            headers=headers
+          )
+          
+          print('Correlation ID:', response.headers.get('X-Correlation-Id'))
+          if response.status_code == 201:
+            print('Request was successful!')
+            print('Response body:', response.json())
+          else:
+            print('Request failed with status code:', response.status_code)
+            print('Response body:', response.json())
+            exit(1)
+          "
+          echo "::endgroup::"
