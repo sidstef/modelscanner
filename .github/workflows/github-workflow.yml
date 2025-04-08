@@ -23,7 +23,7 @@ on:
 
 jobs:
   scan-huggingface-model:
-    runs-on: self-hosted
+    runs-on: [self-hosted, github-runner-scale-set-default]
     name: Scan HuggingFace Model (${{ inputs.huggingface_repo_id }})
     steps:
       - name: Checkout code
